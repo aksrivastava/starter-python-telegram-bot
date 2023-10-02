@@ -31,20 +31,22 @@ def send_welcome_to_existing_members(update: Update, context: CallbackContext) -
     ACTIVE_CHAT_ID = chat_id
 
 # Simulate activity every 5 minutes to keep the bot running
-def simulate_activity():
+def simulate_activity(context: CallbackContext) -> None:
     global ACTIVE_CHAT_ID
     if ACTIVE_CHAT_ID:
         # Check if there are new messages to reply to
-        messages = updater.bot.get_updates()
-        for message in messages:
-            if message.message:
-                update = Update.de_json(message.to_dict(), updater.bot)
-                on_message(update, None)
+        # This is not efficient, but it's a workaround for the limitation of Cyclic
+        messages = context.bot.get_updates()
+        if messages:
+            for message in messages:
+                if message.message:
+                    update = Update.de_json(message.to_dict(), context.bot)
+                    on_message(update, None)
 
         # Send periodic "Bot is active" message
-        updater.bot.send_message(ACTIVE_CHAT_ID, text='Bot is active!')
+        context.bot.send_message(ACTIVE_CHAT_ID, text='Bot is active!')
 
-    threading.Timer(300, simulate_activity).start()
+    threading.Timer(300, simulate_activity, args=[context]).start()
 
 # Function to handle incoming messages
 def on_message(update: Update, context: CallbackContext) -> None:
@@ -74,7 +76,7 @@ def main():
     updater.start_polling()
 
     # Start simulating activity every 5 minutes
-    simulate_activity()
+    simulate_activity(dp)
 
     updater.idle()
 
