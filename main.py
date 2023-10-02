@@ -1,45 +1,50 @@
-import os
-from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Depends
-from telegram import Update, Bot
-from pydantic import BaseModel
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-class TelegramUpdate(BaseModel):
-    update_id: int
-    message: dict
+# Replace 'YOUR_API_TOKEN' with your actual Telegram bot API token
+TOKEN = '6545788125:AAFscNRGesAI3ZY9b81VaRA7JkY5SDc06Z4'
 
-app = FastAPI()
+# Function to handle the /start command
+def start(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text('Welcome to Physics Wallha Telegram channel!')
 
-# Load variables from .env file if present
-load_dotenv()
+# Function to handle new members joining the channel
+def new_chat_members(update: Update, context: CallbackContext) -> None:
+    for member in update.message.new_chat_members:
+        update.message.reply_text(f'Welcome to Physics Wallha Telegram channel, {member.first_name}!')
 
-# Read the variable from the environment (or .env file)
-bot_token = os.getenv('BOT_TOKEN')
-secret_token = os.getenv("SECRET_TOKEN")
-# webhook_url = os.getenv('CYCLIC_URL', 'http://localhost:8181') + "/webhook/"
+# Function to handle members leaving the channel
+def left_chat_member(update: Update, context: CallbackContext) -> None:
+    left_member = update.message.left_chat_member
+    update.message.reply_text(f'{left_member.first_name} has left the Physics Wallha Telegram channel.')
 
-bot = Bot(token=bot_token)
-# bot.set_webhook(url=webhook_url)
-# webhook_info = bot.get_webhook_info()
-# print(webhook_info)
+# Function to send a welcome message to all existing members
+def send_welcome_to_existing_members(update: Update, context: CallbackContext) -> None:
+    chat_id = update.message.chat_id
+    members_count = context.bot.get_chat_members_count(chat_id)
+    update.message.reply_text(f'Welcome to Physics Wallha Telegram channel! We currently have {members_count} members.')
 
-def auth_telegram_token(x_telegram_bot_api_secret_token: str = Header(None)) -> str:
-    # return true # uncomment to disable authentication
-    if x_telegram_bot_api_secret_token != secret_token:
-        raise HTTPException(status_code=403, detail="Not authenticated")
-    return x_telegram_bot_api_secret_token
+# Simulate activity every 5 minutes to keep the bot running
+def simulate_activity(context: CallbackContext) -> None:
+    context.bot.send_message(context.job.context, text='Bot is active.')
 
-@app.post("/webhook/")
-async def handle_webhook(update: TelegramUpdate, token: str = Depends(auth_telegram_token)):
-    chat_id = update.message["chat"]["id"]
-    text = update.message["text"]
-    # print("Received message:", update.message)
+def main():
+    updater = Updater(TOKEN)
+    dp = updater.dispatcher
 
-    if text == "/start":
-        with open('hello.gif', 'rb') as photo:
-            await bot.send_photo(chat_id=chat_id, photo=photo)
-        await bot.send_message(chat_id=chat_id, text="Welcome to Cyclic Starter Python Telegram Bot!")
-    else:
-        await bot.send_message(chat_id=chat_id, reply_to_message_id=update.message["message_id"], text="Yo!")
+    # Add handlers
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, new_chat_members))
+    dp.add_handler(MessageHandler(Filters.status_update.left_chat_member, left_chat_member))
+    dp.add_handler(CommandHandler("welcome_existing_members", send_welcome_to_existing_members))
 
-    return {"ok": True}
+    # Start the Bot
+    updater.start_polling()
+
+    # Schedule the activity simulation every 5 minutes
+    updater.job_queue.run_repeating(simulate_activity, interval=300, context=updater.bot.get_updates()[-1].message.chat_id)
+
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
